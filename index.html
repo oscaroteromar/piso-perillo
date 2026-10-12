@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piso Perillo</title>
+<style>
+  :root { --bg:#eceae6; --panel:rgba(255,255,255,.9); --text:#2b2a28; --muted:#77736c; --accent:#8a6a45; --line:#d6d2ca; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  #view { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .panel { position:fixed; top:16px; left:16px; background:var(--panel); backdrop-filter:blur(8px);
+    border-radius:12px; padding:14px 16px; box-shadow:0 4px 20px rgba(0,0,0,.08); max-width:calc(100vw - 32px); }
+  h1 { font-size:16px; margin:0 0 10px; letter-spacing:.02em; }
+  .label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:12px 0 6px; }
+  .label:first-of-type { margin-top:0; }
+  .seg { display:flex; flex-wrap:wrap; gap:6px; }
+  .seg button { font:inherit; border:1px solid var(--line); background:#fff; color:var(--text);
+    padding:6px 10px; border-radius:8px; cursor:pointer; }
+  .seg button:hover { border-color:var(--accent); }
+  .seg button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  select { font:inherit; color:var(--text); width:100%; padding:7px 32px 7px 10px; border:1px solid var(--line);
+    border-radius:8px; cursor:pointer; appearance:none; -webkit-appearance:none;
+    background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2377736c' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center; }
+  select:hover, select:focus { border-color:var(--accent); outline:none; }
+  .layers { display:flex; flex-wrap:wrap; gap:2px 14px; max-width:320px; }
+  .layers label { display:flex; align-items:center; gap:6px; padding:3px 0; cursor:pointer; user-select:none; }
+  .layers input { accent-color:var(--accent); width:16px; height:16px; margin:0; }
+  .panel { transition:opacity .2s, transform .2s; }
+  body.menu-hidden .panel, body.menu-hidden .hint { opacity:0; transform:translateY(-6px); pointer-events:none; }
+  .icon-btn { font:inherit; display:grid; place-items:center; width:32px; height:32px; padding:0; border-radius:8px;
+    border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; }
+  .icon-btn svg { width:18px; height:18px; }
+  #hideMenu { position:absolute; top:6px; right:6px; width:24px; height:24px; }
+  #hideMenu svg { width:16px; height:16px; }
+  #showMenu { position:fixed; top:16px; left:16px; width:40px; height:40px; background:var(--panel);
+    backdrop-filter:blur(8px); box-shadow:0 4px 20px rgba(0,0,0,.08); color:var(--text);
+    opacity:0; pointer-events:none; transition:opacity .2s; }
+  body.menu-hidden #showMenu { opacity:1; pointer-events:auto; }
+  .hint { position:fixed; bottom:12px; left:50%; transform:translateX(-50%); color:var(--muted);
+    font-size:12px; background:var(--panel); padding:5px 10px; border-radius:20px; white-space:nowrap; }
+  #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:var(--muted); font-size:15px;
+    background:var(--panel); padding:8px 14px; border-radius:20px; pointer-events:none; }
+  #loading[hidden] { display:none; }
+  @media (max-width:600px) {
+    .panel { top:auto; bottom:44px; left:12px; right:12px; padding:10px 12px; }
+    #hideMenu { top:4px; right:4px; }
+    .panel > .label:first-of-type { margin-bottom:10px; }
+    #showMenu { top:auto; bottom:12px; left:12px; }
+    h1 { display:none; } .label { margin:8px 0 4px; }
+    .hint { font-size:11px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="loading">Cargando el piso…</div>
+<button class="icon-btn" id="showMenu" aria-label="Mostrar menú" title="Mostrar menú (M)">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+</button>
+<div class="panel" id="panel">
+  <button class="icon-btn" id="hideMenu" aria-label="Ocultar menú" title="Ocultar menú (M)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+  <h1>Piso Perillo</h1>
+  <div class="label">Opción</div>
+  <select id="scenes" aria-label="Opción"></select>
+  <div class="label">Mostrar</div>
+  <div class="layers" id="layers"></div>
+  <div class="label">Vista</div>
+  <div class="seg">
+    <button id="v3d">3D</button>
+    <button id="vtop">Planta</button>
+  </div>
+</div>
+<div class="hint">Arrastra para girar · rueda o pellizco para zoom · clic derecho / dos dedos para mover</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const LAYER_ORDER = ['Estructura', 'Muebles', 'Acabados', 'Decoración', 'Cotas'];
+const layerOn = { Cotas: false };   // el resto, visibles por defecto
+
+function setMenu(hidden) {
+  document.body.classList.toggle('menu-hidden', hidden);
+  document.getElementById('panel').inert = hidden;
+  try { localStorage.setItem('perillo-menu-hidden', hidden ? '1' : ''); } catch {}
+}
+document.getElementById('hideMenu').onclick = () => setMenu(true);
+document.getElementById('showMenu').onclick = () => setMenu(false);
+addEventListener('keydown', e => {
+  if ((e.key === 'm' || e.key === 'M') && !e.metaKey && !e.ctrlKey && !e.altKey && e.target.tagName !== 'SELECT')
+    setMenu(!document.body.classList.contains('menu-hidden'));
+});
+try { if (localStorage.getItem('perillo-menu-hidden')) setMenu(true); } catch {}
+
+const canvas = document.getElementById('view');
+const loadingEl = document.getElementById('loading');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeceae6);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.8;
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8cfc2, 0.8));
+const sun = new THREE.DirectionalLight(0xfff4e5, 1.6);
+sun.position.set(5, 10, 4);
+scene.add(sun);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 500);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.screenSpacePanning = true;
+controls.minDistance = 0.3;
+
+let center = new THREE.Vector3(), radius = 10, framed = false;
+function frame(top) {
+  controls.target.copy(center);
+  const vFov = THREE.MathUtils.degToRad(camera.fov);
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const dist = radius / Math.sin(Math.min(vFov, hFov) / 2) * (top ? 1.0 : 1.05);
+  if (top) camera.position.set(center.x, center.y + dist, center.z + 0.001);
+  else camera.position.copy(center).add(new THREE.Vector3(0.6, 0.75, 0.35).normalize().multiplyScalar(dist));
+  controls.update();
+}
+document.getElementById('v3d').onclick = () => frame(false);
+document.getElementById('vtop').onclick = () => frame(true);
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+const info = await fetch('scenes.json').then(r => r.json());
+const loader = new GLTFLoader();
+const cache = {};          // id -> { model, groups }
+let current = null;
+
+function applyLayers() {
+  if (!current) return;
+  for (const [layer, objs] of Object.entries(current.groups)) {
+    const on = layerOn[layer] ?? true;
+    objs.forEach(o => o.visible = on);
+  }
+}
+
+function buildLayerUI(groups) {
+  const el = document.getElementById('layers');
+  el.innerHTML = '';
+  for (const layer of LAYER_ORDER.filter(l => groups[l]).concat(Object.keys(groups).filter(l => !LAYER_ORDER.includes(l)))) {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = layerOn[layer] ?? true;
+    cb.onchange = () => { layerOn[layer] = cb.checked; applyLayers(); };
+    label.append(cb, ' ' + layer);
+    el.appendChild(label);
+  }
+}
+
+async function loadScene(entry) {
+  if (cache[entry.id]) return cache[entry.id];
+  const gltf = await loader.loadAsync(entry.file);
+  const model = gltf.scene;
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      const c = info.fallbackColors?.[m.name];
+      if (c) m.color.setRGB(c[0], c[1], c[2]);
+      if (/vidrio|cristal/i.test(m.name)) { m.transparent = true; m.opacity = Math.min(m.opacity, 0.3); }
+    }
+  });
+  const groups = {};
+  for (const [objName, layer] of Object.entries(entry.layers)) {
+    const obj = model.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(objName));
+    if (obj) (groups[layer] ||= []).push(obj);
+  }
+  return cache[entry.id] = { model, groups };
+}
+
+const sceneBtns = document.getElementById('scenes');
+async function show(id) {
+  const entry = info.scenes.find(s => s.id === id) || info.scenes[0];
+  sceneBtns.value = entry.id;
+  loadingEl.hidden = false;
+  const s = await loadScene(entry);
+  if (current) scene.remove(current.model);
+  current = s;
+  scene.add(s.model);
+  buildLayerUI(s.groups);
+  applyLayers();
+  if (!framed) {
+    const sphere = new THREE.Box3().setFromObject(s.model).getBoundingSphere(new THREE.Sphere());
+    center.copy(sphere.center); radius = sphere.radius;
+    controls.maxDistance = radius * 6;
+    frame(false); framed = true;
+  }
+  loadingEl.hidden = true;
+  history.replaceState(null, '', '#' + entry.id);
+}
+for (const s of info.scenes) sceneBtns.add(new Option(s.name, s.id));
+sceneBtns.onchange = () => show(sceneBtns.value);
+await show(location.hash.slice(1));
+info.scenes.forEach(s => loadScene(s));   // precarga las demás
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
